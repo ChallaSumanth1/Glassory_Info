@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Dictionary</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0e18;--surface:#13172400;--surface:#13172480;--surface:#131724;
+  --surface2:#1c2033;--surface3:#242840;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.12);
+  --text:#e6e9f4;--muted:#7a84a0;
+  --accent:#5b6ef5;--a2:#38d9a9;--a3:#f5a623;--a4:#f06292;--a5:#ab68ff;
+  --r:10px;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.6;
+  background-image:radial-gradient(ellipse 80% 50% at 50% -20%,rgba(91,110,245,.12),transparent);
+}
+
+/* ── LOADING SCREEN ── */
+#loadingScreen{
+  position:fixed;inset:0;background:var(--bg);z-index:999;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+  transition:opacity .4s;
+}
+#loadingScreen.hidden{opacity:0;pointer-events:none}
+.loader-logo{font-size:32px;font-weight:600;letter-spacing:-1px;color:var(--text)}
+.loader-logo span{color:var(--accent)}
+.loader-bar{width:220px;height:3px;background:var(--surface2);border-radius:2px;overflow:hidden}
+.loader-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--a2));border-radius:2px;
+  animation:loadfill 1.8s ease-in-out infinite}
+@keyframes loadfill{0%{width:0%;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}
+.loader-msg{font-size:12px;color:var(--muted)}
+
+/* ── ERROR BANNER ── */
+#errorBanner{
+  display:none;background:rgba(240,98,146,.1);border:1px solid rgba(240,98,146,.3);
+  border-radius:var(--r);padding:14px 20px;margin:20px;font-size:13px;color:#f06292;
+}
+#errorBanner a{color:#f06292;font-weight:600}
+
+/* ── LAYOUT ── */
+.layout{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  background:var(--surface);border-right:1px solid var(--border);
+  padding:22px 14px;display:flex;flex-direction:column;gap:4px;
+  position:sticky;top:0;height:100vh;overflow-y:auto;
+}
+.logo{font-size:14px;font-weight:600;letter-spacing:-.3px;margin-bottom:20px;
+  display:flex;align-items:center;gap:10px}
+.logo-icon{width:30px;height:30px;background:linear-gradient(135deg,var(--accent),var(--a5));
+  border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.sync-tag{margin-left:auto;font-size:10px;color:var(--a2);background:rgba(56,217,169,.1);
+  border:1px solid rgba(56,217,169,.2);border-radius:20px;padding:1px 7px;white-space:nowrap}
+.nav-label{font-size:9px;font-weight:600;letter-spacing:1.4px;color:var(--muted);
+  text-transform:uppercase;padding:12px 10px 4px}
+.nav-item{padding:7px 10px;border-radius:7px;cursor:pointer;color:var(--muted);font-size:12.5px;
+  display:flex;align-items:center;gap:9px;transition:all .12s;user-select:none}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:rgba(91,110,245,.16);color:var(--accent);font-weight:500}
+.nav-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.nav-count{margin-left:auto;font-size:11px;color:var(--muted);font-family:var(--mono)}
+.sidebar-footer{margin-top:auto;padding-top:14px;border-top:1px solid var(--border)}
+.sf-row{font-size:11.5px;color:var(--muted);display:flex;justify-content:space-between;padding:3px 2px}
+.sf-row strong{color:var(--text);font-family:var(--mono)}
+.refresh-btn{
+  margin-top:10px;width:100%;background:none;border:1px solid var(--border2);
+  border-radius:7px;padding:7px;color:var(--muted);font-family:var(--font);font-size:11.5px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;
+  transition:all .15s;
+}
+.refresh-btn:hover{border-color:var(--accent);color:var(--accent)}
+.refresh-btn.spinning svg{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── MAIN ── */
+.main{padding:28px 30px;overflow:auto}
+.page-header{margin-bottom:24px}
+.breadcrumb{font-size:11px;color:var(--muted);margin-bottom:8px;display:flex;gap:5px;align-items:center}
+.page-title{font-size:22px;font-weight:600;letter-spacing:-.5px}
+.page-sub{color:var(--muted);font-size:13px;margin-top:3px}
+.last-sync{font-size:11px;color:var(--muted);margin-top:5px}
+.last-sync span{color:var(--a2)}
+
+/* ── KPI ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:22px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:16px 18px;position:relative;overflow:hidden;transition:border-color .15s,transform .15s}
+.kpi:hover{border-color:var(--border2);transform:translateY(-1px)}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kc,var(--accent))}
+.kpi::after{content:'';position:absolute;top:0;right:0;width:60px;height:60px;
+  background:radial-gradient(circle,var(--kc,var(--accent)) 0%,transparent 70%);
+  opacity:.07;border-radius:0 var(--r) 0 0}
+.kpi-label{font-size:9.5px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.kpi-value{font-size:28px;font-weight:600;letter-spacing:-1px;font-family:var(--mono)}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:3px}
+
+/* ── CHARTS ── */
+.charts-row{display:grid;grid-template-columns:1fr 290px;gap:14px;margin-bottom:14px}
+.charts-row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px}
+.chart-title{font-size:13px;font-weight:600;margin-bottom:2px}
+.chart-sub{font-size:11px;color:var(--muted);margin-bottom:14px}
+.legend{display:flex;flex-wrap:wrap;gap:7px 12px;margin-top:12px}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.legend-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+
+/* ── TABLE CARD ── */
+.table-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.table-header{padding:14px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.table-title{font-size:13px;font-weight:600}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.search-box{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;
+  padding:6px 11px;color:var(--text);font-family:var(--font);font-size:13px;width:200px;
+  outline:none;transition:border-color .15s}
+.search-box::placeholder{color:var(--muted)}
+.search-box:focus{border-color:var(--accent)}
+.fsel{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;
+  padding:6px 9px;color:var(--text);font-family:var(--font);font-size:12px;outline:none;cursor:pointer}
+.fsel:focus{border-color:var(--accent)}
+.count-tag{font-size:12px;color:var(--muted);white-space:nowrap}
+.count-tag strong{color:var(--accent);font-family:var(--mono)}
+
+/* ── TABLE ── */
+.table-wrap{overflow-x:auto;max-height:560px;overflow-y:auto}
+table{width:100%;border-collapse:collapse}
+thead{position:sticky;top:0;z-index:2}
+thead tr{background:var(--surface2);border-bottom:1px solid var(--border2)}
+th{padding:9px 14px;font-size:9.5px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;
+  color:var(--muted);text-align:left;white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--text)}
+th.sorted{color:var(--accent)}
+.sort-icon{margin-left:3px;opacity:.35;font-style:normal}
+th.sorted .sort-icon{opacity:1}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:rgba(255,255,255,.022)}
+td{padding:10px 14px;font-size:13px;vertical-align:top}
+td.num{font-family:var(--mono);font-size:11.5px;color:var(--muted);vertical-align:middle;width:44px}
+
+/* name cell */
+.name-primary{font-size:13px;font-weight:500;color:var(--text);line-height:1.3}
+.name-sub{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4}
+
+/* desc cell */
+.desc-cell{font-size:12px;color:var(--muted);line-height:1.55}
+.desc-short{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.desc-short.expanded{display:block;overflow:visible;color:var(--text)}
+.desc-toggle{font-size:11px;color:var(--accent);cursor:pointer;margin-top:3px;
+  display:inline-block;background:none;border:none;padding:0;font-family:var(--font)}
+.desc-toggle:hover{text-decoration:underline}
+
+/* tables-used cell */
+.tables-cell{font-size:11px;color:var(--muted);font-family:var(--mono);line-height:1.6;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* badges */
+.badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap}
+.b-tps{background:rgba(91,110,245,.14);color:#8fa3ff}
+.b-mdfl{background:rgba(56,217,169,.14);color:#38d9a9}
+.b-both{background:rgba(245,166,35,.14);color:#f5a623}
+.b-pm{background:rgba(171,104,255,.14);color:#ab68ff}
+.b-other{background:rgba(122,132,160,.1);color:var(--muted)}
+.b-sql{background:rgba(91,110,245,.1);color:#8fa3ff}
+.b-excel{background:rgba(56,217,169,.1);color:#38d9a9}
+.b-sqlexcel{background:rgba(245,166,35,.1);color:#f5a623}
+
+/* POC */
+.poc-cell{display:flex;align-items:center;gap:7px}
+.poc-avatar{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;
+  justify-content:center;font-size:9px;font-weight:600;flex-shrink:0;letter-spacing:.3px}
+.poc-name{font-size:12px;line-height:1.3}
+
+/* empty */
+.empty{text-align:center;padding:50px;color:var(--muted);font-size:13px}
+.empty-icon{font-size:28px;margin-bottom:8px}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;
+  display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:14px;
+  padding:28px 30px;width:660px;max-width:96vw;max-height:92vh;overflow-y:auto;
+  transform:translateY(12px);transition:transform .22s;position:relative}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-title{font-size:16px;font-weight:600;margin-bottom:3px}
+.modal-sub{font-size:12px;color:var(--muted);margin-bottom:22px}
+.modal-close{position:absolute;top:18px;right:20px;background:none;border:none;
+  color:var(--muted);font-size:18px;cursor:pointer;line-height:1;padding:4px}
+.modal-close:hover{color:var(--text)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 20px}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-group.full{grid-column:1/-1}
+.form-label{font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+.form-input,.form-select,.form-textarea{background:var(--surface2);border:1px solid var(--border2);
+  border-radius:8px;padding:8px 12px;color:var(--text);font-family:var(--font);font-size:13px;
+  outline:none;transition:border-color .15s;width:100%}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent)}
+.form-textarea{min-height:88px;resize:vertical;line-height:1.5}
+.form-select option{background:#1c2033}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;
+  padding-top:18px;border-top:1px solid var(--border)}
+.btn-cancel{background:none;border:1px solid var(--border2);border-radius:8px;padding:8px 18px;
+  color:var(--muted);font-family:var(--font);font-size:13px;cursor:pointer;transition:all .12s}
+.btn-cancel:hover{color:var(--text)}
+.btn-save{background:var(--accent);border:none;border-radius:8px;padding:8px 22px;color:#fff;
+  font-family:var(--font);font-size:13px;font-weight:500;cursor:pointer;transition:opacity .15s}
+.btn-save:hover{opacity:.85}
+.btn-delete-modal{background:rgba(240,98,146,.1);border:1px solid rgba(240,98,146,.25);
+  border-radius:8px;padding:8px 18px;color:#f06292;font-family:var(--font);font-size:13px;
+  cursor:pointer;transition:all .12s;margin-right:auto}
+.btn-delete-modal:hover{background:rgba(240,98,146,.2)}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--border2);
+  border-radius:9px;padding:10px 18px;font-size:13px;color:var(--text);z-index:200;
+  transform:translateY(10px);opacity:0;transition:all .25s;pointer-events:none;max-width:340px}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.success{border-color:#38d9a9;color:#38d9a9}
+.toast.error{border-color:#f06292;color:#f06292}
+.toast.info{border-color:#5b6ef5;color:#8fa3ff}
+
+/* scrollbar */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- LOADING SCREEN -->
+<div id="loadingScreen">
+  <div class="loader-logo">Dashboard <span>Dict</span></div>
+  <div class="loader-bar"><div class="loader-fill"></div></div>
+  <div class="loader-msg" id="loaderMsg">Fetching latest data from Google Sheets…</div>
+</div>
+
+<!-- ERROR BANNER -->
+<div id="errorBanner">
+  ⚠️ Could not load data from Google Sheets.
+  <a href="#" onclick="loadData(true);return false">Retry</a> or check if the sheet is published publicly.
+</div>
+
+<div class="layout" id="appLayout" style="display:none">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">📊</div>
+      Dashboard Dict
+      <span class="sync-tag">● Live</span>
+    </div>
+
+    <div class="nav-label">Views</div>
+    <div class="nav-item active" id="nav-overview" onclick="setView('overview')">
+      <div class="nav-dot" style="background:#5b6ef5"></div> Overview
+    </div>
+    <div class="nav-item" id="nav-table" onclick="setView('table')">
+      <div class="nav-dot" style="background:#38d9a9"></div> All Dashboards
+    </div>
+
+    <div class="nav-label">Audience</div>
+    <div class="nav-item" id="nav-All" onclick="filterSidebar('audience','All')">
+      <div class="nav-dot" style="background:#7a84a0"></div> All <span class="nav-count" id="nc-all">—</span>
+    </div>
+    <div class="nav-item" id="nav-TPS" onclick="filterSidebar('audience','TPS')">
+      <div class="nav-dot" style="background:#8fa3ff"></div> TPS <span class="nav-count" id="nc-tps">—</span>
+    </div>
+    <div class="nav-item" id="nav-MDFL" onclick="filterSidebar('audience','MDFL')">
+      <div class="nav-dot" style="background:#38d9a9"></div> MDFL <span class="nav-count" id="nc-mdfl">—</span>
+    </div>
+    <div class="nav-item" id="nav-TPS & MDFL" onclick="filterSidebar('audience','TPS & MDFL')">
+      <div class="nav-dot" style="background:#f5a623"></div> TPS &amp; MDFL <span class="nav-count" id="nc-both">—</span>
+    </div>
+    <div class="nav-item" id="nav-PM" onclick="filterSidebar('audience','PM')">
+      <div class="nav-dot" style="background:#ab68ff"></div> PM <span class="nav-count" id="nc-pm">—</span>
+    </div>
+
+    <div class="nav-label">Teams</div>
+    <div class="nav-item" id="nav-t-Panel Quality" onclick="filterSidebar('team','Panel Quality')">
+      <div class="nav-dot" style="background:#f06292"></div> Panel Quality <span class="nav-count" id="nc-t-pq">—</span>
+    </div>
+    <div class="nav-item" id="nav-t-CME" onclick="filterSidebar('team','CME')">
+      <div class="nav-dot" style="background:#5b6ef5"></div> CME <span class="nav-count" id="nc-t-cme">—</span>
+    </div>
+    <div class="nav-item" id="nav-t-Sampling Team" onclick="filterSidebar('team','Sampling Team')">
+      <div class="nav-dot" style="background:#38d9a9"></div> Sampling <span class="nav-count" id="nc-t-sampling">—</span>
+    </div>
+    <div class="nav-item" id="nav-t-Panel Building Team" onclick="filterSidebar('team','Panel Building Team')">
+      <div class="nav-dot" style="background:#f5a623"></div> Panel Building <span class="nav-count" id="nc-t-pb">—</span>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="sf-row"><span>Total</span><strong id="sf-total">—</strong></div>
+      <div class="sf-row"><span>Teams</span><strong id="sf-teams">—</strong></div>
+      <div class="sf-row"><span>POCs</span><strong id="sf-pocs">—</strong></div>
+      <button class="refresh-btn" id="refreshBtn" onclick="loadData(true)">
+        <svg id="refreshIcon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="1 4 1 10 7 10"></polyline>
+          <path d="M3.51 15a9 9 0 1 0 .49-3.51"></path>
+        </svg>
+        Refresh from Sheets
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <main class="main">
+
+    <!-- OVERVIEW -->
+    <div id="sec-overview">
+      <div class="page-header">
+        <div class="breadcrumb"><span>Home</span> › Overview</div>
+        <div class="page-title">Dashboard Dictionary</div>
+        <div class="page-sub">Complete inventory of all reporting dashboards across TPS and MDFL platforms</div>
+        <div class="last-sync">Last synced: <span id="lastSyncTime">—</span></div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi" style="--kc:#5b6ef5"><div class="kpi-label">Total</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub">Dashboards</div></div>
+        <div class="kpi" style="--kc:#8fa3ff"><div class="kpi-label">TPS</div><div class="kpi-value" id="kpi-tps">—</div><div class="kpi-sub" id="kpi-tps-sub">—</div></div>
+        <div class="kpi" style="--kc:#38d9a9"><div class="kpi-label">MDFL</div><div class="kpi-value" id="kpi-mdfl">—</div><div class="kpi-sub" id="kpi-mdfl-sub">—</div></div>
+        <div class="kpi" style="--kc:#f5a623"><div class="kpi-label">TPS &amp; MDFL</div><div class="kpi-value" id="kpi-both">—</div><div class="kpi-sub">Shared audience</div></div>
+        <div class="kpi" style="--kc:#ab68ff"><div class="kpi-label">SQL-only</div><div class="kpi-value" id="kpi-sql">—</div><div class="kpi-sub" id="kpi-sql-sub">—</div></div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-title">Dashboards by Team</div>
+          <div class="chart-sub">Count per team</div>
+          <div style="position:relative;height:210px"><canvas id="teamChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Data Source</div>
+          <div class="chart-sub">By database type</div>
+          <div style="position:relative;height:148px"><canvas id="dbChart"></canvas></div>
+          <div class="legend" id="dbLegend"></div>
+        </div>
+      </div>
+
+      <div class="charts-row2">
+        <div class="chart-card">
+          <div class="chart-title">Audience Breakdown</div>
+          <div class="chart-sub">Dashboards per audience segment</div>
+          <div style="position:relative;height:170px"><canvas id="audChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Top POCs by Ownership</div>
+          <div class="chart-sub">Most active owners (top 7)</div>
+          <div style="position:relative;height:170px"><canvas id="pocChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLE VIEW header -->
+    <div id="sec-table" style="display:none">
+      <div class="page-header">
+        <div class="breadcrumb"><span>Home</span> › All Dashboards</div>
+        <div class="page-title">All Dashboards</div>
+        <div class="page-sub">Search, filter and browse the full dashboard inventory</div>
+        <div class="last-sync">Last synced: <span id="lastSyncTime2">—</span></div>
+      </div>
+    </div>
+
+    <!-- TABLE CARD (always visible) -->
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">Dashboard Inventory</div>
+        <div class="controls">
+          <input class="search-box" id="searchInput" placeholder="Search name, team, POC…" oninput="applyFilters()">
+          <select class="fsel" id="audFilter" onchange="applyFilters()">
+            <option value="">All audiences</option>
+            <option>TPS</option><option>MDFL</option><option>TPS & MDFL</option><option>PM</option>
+          </select>
+          <select class="fsel" id="teamFilter" onchange="applyFilters()">
+            <option value="">All teams</option>
+            <option>Panel Quality</option><option>CME</option><option>Sampling Team</option>
+            <option>Panel Building Team</option><option>Vendor Management Team</option>
+            <option>PM's</option><option>Others</option><option>Finance Team</option>
+          </select>
+          <select class="fsel" id="dbFilter" onchange="applyFilters()">
+            <option value="">All sources</option>
+            <option>SQL</option><option>SQL + Excel</option><option>Excel</option>
+          </select>
+          <span class="count-tag">Showing <strong id="countDisplay">0</strong> of <span id="totalCount">0</span></span>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="mainTable">
+          <colgroup>
+            <col style="width:44px">
+            <col style="width:185px">
+            <col style="width:96px">
+            <col style="width:135px">
+            <col style="width:125px">
+            <col style="width:86px">
+            <col>
+          </colgroup>
+          <thead>
+            <tr>
+              <th onclick="sortTable('no')"># <i class="sort-icon">↕</i></th>
+              <th onclick="sortTable('name')">Report Name <i class="sort-icon">↕</i></th>
+              <th onclick="sortTable('audience')">Audience <i class="sort-icon">↕</i></th>
+              <th onclick="sortTable('team')">Team <i class="sort-icon">↕</i></th>
+              <th onclick="sortTable('poc')">POC <i class="sort-icon">↕</i></th>
+              <th onclick="sortTable('db')">Source <i class="sort-icon">↕</i></th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+        <div class="empty" id="emptyState" style="display:none">
+          <div class="empty-icon">🔍</div>
+          No dashboards match your filters.
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL (view details) -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title" id="modalTitle">Dashboard Details</div>
+    <div class="modal-sub" id="modalSub"></div>
+    <div class="form-grid" id="modalGrid"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   CONFIG
+   ============================================================ */
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSDqIRMmAmlq6H06u-zoj-TjBAMxjvbtV56WCFuYp5jdbw3ipcDaAtiQGQiRlJvikE4tJ3Au_Qn-Ybp/pub?gid=0&single=true&output=csv';
+
+const TEAM_COLORS = {
+  'Panel Quality':'#f06292','CME':'#5b6ef5','Sampling Team':'#38d9a9',
+  'Panel Building Team':'#f5a623','Vendor Management Team':'#ab68ff',
+  "PM's":'#4dd0e1','Others':'#7a84a0','Finance Team':'#ff8a65'
+};
+const POC_PALETTE = ['#5b6ef5','#38d9a9','#f5a623','#f06292','#ab68ff','#4dd0e1','#ff8a65','#8fa3ff','#a78bfa','#34d399'];
+const pocColors = {};
+let pocIdx = 0;
+function pocColor(n){ if(!pocColors[n]) pocColors[n]=POC_PALETTE[pocIdx++%POC_PALETTE.length]; return pocColors[n]; }
+function initials(n){ return (n||'?').trim().split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase(); }
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let DATA = [];
+let filtered = [];
+let sortKey = 'no', sortDir = 1;
+let charts = {};
+
+/* ============================================================
+   CSV PARSER  (handles quoted fields with commas inside)
+   ============================================================ */
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/);
+  const headers = splitCSVRow(lines[0]);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const vals = splitCSVRow(lines[i]);
+    const obj = {};
+    headers.forEach((h, idx) => { obj[h.trim()] = (vals[idx]||'').trim(); });
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function splitCSVRow(row) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < row.length; i++) {
+    const c = row[i];
+    if (c === '"') { inQ = !inQ; }
+    else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
+    else { cur += c; }
+  }
+  result.push(cur);
+  return result;
+}
+
+/* ============================================================
+   LOAD DATA FROM GOOGLE SHEETS
+   ============================================================ */
+async function loadData(isRefresh = false) {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  if (!isRefresh) {
+    document.getElementById('loaderMsg').textContent = 'Fetching latest data from Google Sheets…';
+  } else {
+    showToast('Refreshing from Google Sheets…', 'info');
+  }
+
+  try {
+    /* Cache-bust so we always get the latest version */
+    const url = SHEET_CSV_URL + '&_t=' + Date.now();
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+
+    const rows = parseCSV(text);
+    if (!rows.length) throw new Error('Sheet returned no rows');
+
+    DATA = rows
+      .map((row, i) => mapRow(row, i))
+      .filter(r => r.name && r.name.toLowerCase() !== 'report name' && r.name !== '');
+
+    /* Update sync time */
+    const now = new Date().toLocaleString('en-IN', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    document.getElementById('lastSyncTime').textContent  = now;
+    document.getElementById('lastSyncTime2').textContent = now;
+
+    refreshAll();
+
+    /* Show app */
+    document.getElementById('loadingScreen').classList.add('hidden');
+    document.getElementById('errorBanner').style.display = 'none';
+    document.getElementById('appLayout').style.display = 'grid';
+
+    if (isRefresh) showToast(`✓ Refreshed — ${DATA.length} dashboards loaded`, 'success');
+
+  } catch(err) {
+    console.error('Sheet load error:', err);
+    document.getElementById('loadingScreen').classList.add('hidden');
+    document.getElementById('errorBanner').style.display = 'block';
+    if (isRefresh) showToast('Refresh failed: ' + err.message, 'error');
+    /* If we already have data, keep showing it */
+    if (DATA.length) document.getElementById('appLayout').style.display = 'grid';
+  }
+
+  btn.classList.remove('spinning');
+}
+
+/* ── Map a CSV row object to our internal format ── */
+function mapRow(row, i) {
+  /* Flexible header matching */
+  const g = (...keys) => {
+    for (const k of keys) {
+      for (const [rk, rv] of Object.entries(row)) {
+        if (rk.toLowerCase().replace(/[\s_\.]/g,'') === k.toLowerCase().replace(/[\s_\.]/g,''))
+          return (rv||'').trim();
+      }
+    }
+    return '';
+  };
+
+  const no = parseInt(g('sl.no.','sl no','no','#','slno')) || (i+1);
+  let db = g('data base','database','db','datasource','data source');
+  /* normalise db */
+  const dl = db.toLowerCase();
+  if (dl.includes('sql') && dl.includes('excel')) db = 'SQL + Excel';
+  else if (dl.includes('sql')) db = 'SQL';
+  else if (dl.includes('excel')) db = 'Excel';
+
+  return {
+    no,
+    name:     g('report name','reportname'),
+    dashname: g('dashboard name','dashboardname'),
+    audience: g('audience'),
+    team:     g('team'),
+    poc:      g('poc','point of contact'),
+    db,
+    desc:     g('dashboard description','description','desc'),
+    tables:   g('table names','tables','tablenames'),
+    pocDesc:  g('poc dashboard description','pocdashboarddescription'),
+  };
+}
+
+/* ============================================================
+   FULL REFRESH
+   ============================================================ */
+function refreshAll() {
+  filtered = [...DATA];
+  applyFilters();
+  updateKPIs();
+  rebuildCharts();
+}
+
+/* ============================================================
+   BADGES
+   ============================================================ */
+function audBadge(a) {
+  const map={'TPS':'b-tps','MDFL':'b-mdfl','TPS & MDFL':'b-both','PM':'b-pm'};
+  return `<span class="badge ${map[a]||'b-other'}">${a||'—'}</span>`;
+}
+function dbBadge(d) {
+  if(d==='SQL')          return `<span class="badge b-sql">SQL</span>`;
+  if(d==='Excel')        return `<span class="badge b-excel">Excel</span>`;
+  if(d==='SQL + Excel')  return `<span class="badge b-sqlexcel">SQL+Excel</span>`;
+  return `<span class="badge b-other">${d||'—'}</span>`;
+}
+
+/* ============================================================
+   TABLE
+   ============================================================ */
+function renderTable() {
+  const tbody = document.getElementById('tableBody');
+  const empty = document.getElementById('emptyState');
+  document.getElementById('countDisplay').textContent = filtered.length;
+  document.getElementById('totalCount').textContent   = DATA.length;
+  if (!filtered.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(r => {
+    const realIdx = DATA.indexOf(r);
+    const tc = TEAM_COLORS[r.team] || '#7a84a0';
+    const pc = pocColor(r.poc);
+    const descId = 'desc-' + realIdx;
+    const safe = s => (s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return `<tr onclick="openDetailModal(${realIdx})" style="cursor:pointer">
+      <td class="num">${r.no}</td>
+      <td>
+        <div class="name-primary">${safe(r.name)}</div>
+        <div class="name-sub">${safe(r.dashname)}</div>
+      </td>
+      <td>${audBadge(r.audience)}</td>
+      <td><span style="font-size:12px;color:${tc};font-weight:500">${safe(r.team)||'—'}</span></td>
+      <td>
+        <div class="poc-cell">
+          <div class="poc-avatar" style="background:${pc}22;color:${pc}">${initials(r.poc)}</div>
+          <span class="poc-name">${safe(r.poc)||'—'}</span>
+        </div>
+      </td>
+      <td>${dbBadge(r.db)}</td>
+      <td>
+        <div class="desc-cell">
+          <div class="desc-short" id="${descId}">${safe(r.desc)}</div>
+          <button class="desc-toggle" onclick="event.stopPropagation();toggleDesc('${descId}',this)">Show more</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleDesc(id, btn) {
+  const el = document.getElementById(id);
+  const expanded = el.classList.contains('expanded');
+  el.classList.toggle('expanded', !expanded);
+  btn.textContent = expanded ? 'Show more' : 'Show less';
+}
+
+/* ============================================================
+   DETAIL MODAL (read-only, shows all fields)
+   ============================================================ */
+function openDetailModal(idx) {
+  const r = DATA[idx];
+  document.getElementById('modalTitle').textContent = r.name || 'Dashboard Details';
+  document.getElementById('modalSub').textContent   = r.dashname || '';
+  const safe = s => (s||'—').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const pc = pocColor(r.poc);
+  document.getElementById('modalGrid').innerHTML = `
+    <div class="form-group">
+      <div class="form-label">Audience</div>
+      <div style="padding-top:4px">${audBadge(r.audience)}</div>
+    </div>
+    <div class="form-group">
+      <div class="form-label">Data Source</div>
+      <div style="padding-top:4px">${dbBadge(r.db)}</div>
+    </div>
+    <div class="form-group">
+      <div class="form-label">Team</div>
+      <div style="font-size:13px;color:${TEAM_COLORS[r.team]||'var(--text)'};font-weight:500;padding-top:4px">${safe(r.team)}</div>
+    </div>
+    <div class="form-group">
+      <div class="form-label">POC</div>
+      <div class="poc-cell" style="padding-top:4px">
+        <div class="poc-avatar" style="background:${pc}22;color:${pc}">${initials(r.poc)}</div>
+        <span class="poc-name">${safe(r.poc)}</span>
+      </div>
+    </div>
+    <div class="form-group full">
+      <div class="form-label">Description</div>
+      <div style="font-size:13px;color:var(--text);line-height:1.6;padding-top:4px">${safe(r.desc)}</div>
+    </div>
+    ${r.tables ? `<div class="form-group full">
+      <div class="form-label">Table Names</div>
+      <div style="font-size:12px;color:var(--muted);font-family:var(--mono);line-height:1.7;padding-top:4px">${safe(r.tables)}</div>
+    </div>` : ''}
+    ${r.pocDesc ? `<div class="form-group full">
+      <div class="form-label">POC Notes</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.6;padding-top:4px">${safe(r.pocDesc)}</div>
+    </div>` : ''}
+  `;
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function closeModal(){ document.getElementById('modalOverlay').classList.remove('open'); }
+function closeModalOutside(e){ if(e.target===document.getElementById('modalOverlay')) closeModal(); }
+
+/* ============================================================
+   FILTERS
+   ============================================================ */
+function applyFilters() {
+  const q    = document.getElementById('searchInput').value.toLowerCase();
+  const aud  = document.getElementById('audFilter').value;
+  const team = document.getElementById('teamFilter').value;
+  const db   = document.getElementById('dbFilter').value;
+  filtered = DATA.filter(r => {
+    const m = !q || (r.name+r.dashname+r.team+r.poc+r.desc).toLowerCase().includes(q);
+    return m && (!aud||r.audience===aud) && (!team||r.team===team) && (!db||r.db===db);
+  });
+  filtered.sort((a, b) => {
+    const va = sortKey==='no' ? a.no : (a[sortKey]||'');
+    const vb = sortKey==='no' ? b.no : (b[sortKey]||'');
+    return (va>vb?1:va<vb?-1:0)*sortDir;
+  });
+  renderTable();
+}
+
+function sortTable(k) {
+  if(sortKey===k) sortDir*=-1; else{sortKey=k;sortDir=1;}
+  document.querySelectorAll('th').forEach(t=>t.classList.remove('sorted'));
+  const map={no:0,name:1,audience:2,team:3,poc:4,db:5};
+  if(map[k]!==undefined) document.querySelectorAll('th')[map[k]].classList.add('sorted');
+  applyFilters();
+}
+
+/* ============================================================
+   SIDEBAR FILTERS
+   ============================================================ */
+function filterSidebar(type, val) {
+  if(type==='audience'){
+    document.getElementById('audFilter').value  = val==='All' ? '' : val;
+    document.getElementById('teamFilter').value = '';
+  } else {
+    document.getElementById('teamFilter').value = val;
+    document.getElementById('audFilter').value  = '';
+  }
+  document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
+  const id = type==='audience' ? 'nav-'+val : 'nav-t-'+val;
+  const el = document.getElementById(id);
+  if(el) el.classList.add('active');
+  applyFilters();
+  setView('table');
+}
+
+/* ============================================================
+   VIEW
+   ============================================================ */
+function setView(v) {
+  document.getElementById('sec-overview').style.display = v==='overview' ? 'block' : 'none';
+  document.getElementById('sec-table').style.display    = v==='table'    ? 'block' : 'none';
+  document.getElementById('nav-overview').classList.toggle('active', v==='overview');
+  document.getElementById('nav-table').classList.toggle('active', v==='table');
+}
+
+/* ============================================================
+   KPI
+   ============================================================ */
+function updateKPIs() {
+  const total   = DATA.length;
+  const tps     = DATA.filter(d=>d.audience==='TPS').length;
+  const mdfl    = DATA.filter(d=>d.audience==='MDFL').length;
+  const both    = DATA.filter(d=>d.audience==='TPS & MDFL').length;
+  const pm      = DATA.filter(d=>d.audience==='PM').length;
+  const sqlOnly = DATA.filter(d=>d.db==='SQL').length;
+
+  document.getElementById('kpi-total').textContent     = total;
+  document.getElementById('kpi-tps').textContent       = tps;
+  document.getElementById('kpi-tps-sub').textContent   = total ? (tps/total*100).toFixed(1)+'% of total' : '—';
+  document.getElementById('kpi-mdfl').textContent      = mdfl;
+  document.getElementById('kpi-mdfl-sub').textContent  = total ? (mdfl/total*100).toFixed(1)+'% of total' : '—';
+  document.getElementById('kpi-both').textContent      = both;
+  document.getElementById('kpi-sql').textContent       = sqlOnly;
+  document.getElementById('kpi-sql-sub').textContent   = total ? (sqlOnly/total*100).toFixed(1)+'% of dashboards' : '—';
+
+  document.getElementById('sf-total').textContent      = total;
+  document.getElementById('nc-all').textContent        = total;
+  document.getElementById('nc-tps').textContent        = tps;
+  document.getElementById('nc-mdfl').textContent       = mdfl;
+  document.getElementById('nc-both').textContent       = both;
+  document.getElementById('nc-pm').textContent         = pm;
+
+  const teamCounts = {};
+  DATA.forEach(d=>{ teamCounts[d.team]=(teamCounts[d.team]||0)+1; });
+  document.getElementById('nc-t-pq').textContent       = teamCounts['Panel Quality']||0;
+  document.getElementById('nc-t-cme').textContent      = teamCounts['CME']||0;
+  document.getElementById('nc-t-sampling').textContent = teamCounts['Sampling Team']||0;
+  document.getElementById('nc-t-pb').textContent       = teamCounts['Panel Building Team']||0;
+
+  document.getElementById('sf-teams').textContent = [...new Set(DATA.map(d=>d.team).filter(Boolean))].length;
+  document.getElementById('sf-pocs').textContent  = [...new Set(DATA.map(d=>d.poc).filter(Boolean))].length;
+}
+
+/* ============================================================
+   CHARTS
+   ============================================================ */
+function rebuildCharts() {
+  Object.values(charts).forEach(c=>{ try{c.destroy()}catch(e){} });
+  charts = {};
+
+  /* Team */
+  const teamCounts = {};
+  DATA.forEach(d=>{ if(d.team) teamCounts[d.team]=(teamCounts[d.team]||0)+1; });
+  const teams  = Object.keys(teamCounts).sort((a,b)=>teamCounts[b]-teamCounts[a]);
+  charts.team = new Chart(document.getElementById('teamChart'),{
+    type:'bar',
+    data:{labels:teams,datasets:[{data:teams.map(t=>teamCounts[t]),
+      backgroundColor:teams.map(t=>(TEAM_COLORS[t]||'#7a84a0')+'30'),
+      borderColor:teams.map(t=>TEAM_COLORS[t]||'#7a84a0'),
+      borderWidth:1.5,borderRadius:5}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.raw+' dashboards'}}},
+      scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#7a84a0',font:{size:11}}},
+              y:{grid:{display:false},ticks:{color:'#e6e9f4',font:{size:11}}}}}
+  });
+
+  /* DB donut */
+  const total  = DATA.length||1;
+  const sqlN   = DATA.filter(d=>d.db==='SQL').length;
+  const sqlExN = DATA.filter(d=>d.db==='SQL + Excel').length;
+  const exN    = DATA.filter(d=>d.db==='Excel').length;
+  charts.db = new Chart(document.getElementById('dbChart'),{
+    type:'doughnut',
+    data:{labels:['SQL only','SQL + Excel','Excel only'],
+          datasets:[{data:[sqlN,sqlExN,exN],
+            backgroundColor:['#5b6ef5','#f5a623','#38d9a9'],
+            borderColor:'#131724',borderWidth:3}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`}}},
+      cutout:'68%'}
+  });
+  document.getElementById('dbLegend').innerHTML = [
+    {l:'SQL',n:sqlN,c:'#5b6ef5'},{l:'SQL+Excel',n:sqlExN,c:'#f5a623'},{l:'Excel',n:exN,c:'#38d9a9'}
+  ].map(x=>`<div class="legend-item"><div class="legend-dot" style="background:${x.c}"></div>${x.l} — ${Math.round(x.n/total*100)}%</div>`).join('');
+
+  /* Audience */
+  const audMap = {};
+  DATA.forEach(d=>{ const a=d.audience||'—'; audMap[a]=(audMap[a]||0)+1; });
+  const audColors = {'TPS':'#8fa3ff','MDFL':'#38d9a9','TPS & MDFL':'#f5a623','PM':'#ab68ff','—':'#7a84a0','-':'#7a84a0'};
+  const audLabels = Object.keys(audMap).sort((a,b)=>audMap[b]-audMap[a]);
+  charts.aud = new Chart(document.getElementById('audChart'),{
+    type:'bar',
+    data:{labels:audLabels,datasets:[{data:audLabels.map(a=>audMap[a]),
+      backgroundColor:audLabels.map(a=>(audColors[a]||'#7a84a0')+'30'),
+      borderColor:audLabels.map(a=>audColors[a]||'#7a84a0'),
+      borderWidth:1.5,borderRadius:5}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{grid:{display:false},ticks:{color:'#e6e9f4',font:{size:12}}},
+              y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#7a84a0',font:{size:11}}}}}
+  });
+
+  /* POC top 7 */
+  const pocMap = {};
+  DATA.forEach(d=>{ if(d.poc) pocMap[d.poc.trim()]=(pocMap[d.poc.trim()]||0)+1; });
+  const topPocs = Object.keys(pocMap).sort((a,b)=>pocMap[b]-pocMap[a]).slice(0,7);
+  charts.poc = new Chart(document.getElementById('pocChart'),{
+    type:'bar',
+    data:{labels:topPocs,datasets:[{data:topPocs.map(p=>pocMap[p]),
+      backgroundColor:topPocs.map(p=>pocColor(p)+'30'),
+      borderColor:topPocs.map(p=>pocColor(p)),
+      borderWidth:1.5,borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#7a84a0',font:{size:11}}},
+              y:{grid:{display:false},ticks:{color:'#e6e9f4',font:{size:11}}}}}
+  });
+}
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast '+type+' show';
+  setTimeout(()=>t.className='toast', 3000);
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+window.addEventListener('load', () => loadData(false));
+</script>
+</body>
+</html>
